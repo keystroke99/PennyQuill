@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pennyquill",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-29",
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pennyquill-db",
+      "database_id": "edb96409-c52e-4740-8f7c-09613cdc72d8",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "production",
+    "SESSION_DAYS": "30"
+  }
+}

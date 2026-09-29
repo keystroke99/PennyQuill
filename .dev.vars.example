@@ -1,0 +1,5 @@
+APP_ENV="development"
+APP_SETUP_KEY="change-this-local-setup-key"
+PASSWORD_PEPPER="change-this-local-password-pepper-at-least-32-chars"
+SESSION_DAYS="30"
+APP_ORIGIN="http://localhost:5173,http://127.0.0.1:5173"
