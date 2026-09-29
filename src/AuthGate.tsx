@@ -5,6 +5,8 @@ import { BrandMark } from "./icons";
 import type { AuthSession } from "./types";
 import { Button, InlineError } from "./components/Primitives";
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export default function AuthGate({
   configured,
   onAuthenticated,
@@ -101,8 +103,8 @@ export default function AuthGate({
                   type={showPassword ? "text" : "password"}
                   autoComplete={configured ? "current-password" : "new-password"}
                   required
-                  minLength={configured ? 8 : 12}
-                  placeholder={configured ? "Your password" : "At least 12 characters"}
+                  minLength={MIN_PASSWORD_LENGTH}
+                  placeholder={configured ? "Your password" : `At least ${MIN_PASSWORD_LENGTH} characters`}
                 />
                 <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>
                   {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
@@ -158,8 +160,8 @@ export function PasswordChangeGate({
       setError("The new passwords do not match.");
       return;
     }
-    if (newPassword.length < 12 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      setError("Use at least 12 characters with at least one letter and one number.");
+    if (newPassword.length < MIN_PASSWORD_LENGTH || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setError(`Use at least ${MIN_PASSWORD_LENGTH} characters with at least one letter and one number.`);
       return;
     }
 
@@ -196,7 +198,7 @@ export function PasswordChangeGate({
           <span className="auth-card__mobile-brand"><BrandMark /><strong>PennyQuill</strong></span>
           <p className="eyebrow">Password change required</p>
           <h2>Choose a private password</h2>
-          <p className="muted">Signed in as {session.user.email}. Use at least 12 characters with a letter and a number.</p>
+          <p className="muted">Signed in as {session.user.email}. Use at least {MIN_PASSWORD_LENGTH} characters with a letter and a number.</p>
           <form className="form-stack" onSubmit={submit}>
             <label>
               Temporary password
@@ -205,7 +207,7 @@ export function PasswordChangeGate({
             <label>
               New password
               <span className="password-field">
-                <input name="newPassword" type={showPasswords ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} />
+                <input name="newPassword" type={showPasswords ? "text" : "password"} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={128} />
                 <button type="button" onClick={() => setShowPasswords((value) => !value)} aria-label={showPasswords ? "Hide passwords" : "Show passwords"}>
                   {showPasswords ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>
@@ -213,7 +215,7 @@ export function PasswordChangeGate({
             </label>
             <label>
               Confirm new password
-              <input name="confirmation" type={showPasswords ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} />
+              <input name="confirmation" type={showPasswords ? "text" : "password"} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={128} />
             </label>
             {error && <InlineError message={error} />}
             <Button type="submit" disabled={loading}><KeyRound size={18} /> {loading ? "Updating…" : "Set new password"}</Button>

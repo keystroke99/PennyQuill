@@ -94,10 +94,11 @@ function apiRequest(path: string, init?: RequestInit): Request {
 }
 
 describe('password policy', () => {
-  it('allows an eight-character temporary password but enforces the strong permanent policy', () => {
+  it('requires eight characters with a letter and number for permanent passwords', () => {
     expect(passwordForPolicy({ password: '24681357' }, 'password', true)).toBe('24681357');
-    expect(() => passwordForPolicy({ password: '24681357' }, 'password')).toThrowError(/12 characters/);
-    expect(passwordForPolicy({ password: 'StrongPassword123' }, 'password')).toBe('StrongPassword123');
+    expect(() => passwordForPolicy({ password: 'Abc1234' }, 'password')).toThrowError(/8 characters/);
+    expect(() => passwordForPolicy({ password: 'abcdefgh' }, 'password')).toThrowError(/one number/);
+    expect(passwordForPolicy({ password: 'Abcd1234' }, 'password')).toBe('Abcd1234');
   });
 
   it('binds production password hashes to the separate secret pepper', async () => {

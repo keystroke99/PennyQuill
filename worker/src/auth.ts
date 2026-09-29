@@ -22,6 +22,7 @@ const AUTH_ATTEMPT_RETENTION_MS = 24 * 60 * 60 * 1_000;
 const DUMMY_PASSWORD_HASH = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const DUMMY_PASSWORD_SALT = 'AAAAAAAAAAAAAAAAAAAAAA';
 const DUMMY_PASSWORD_ITERATIONS = 100_000;
+const MIN_PASSWORD_LENGTH = 8;
 
 function publicUser(row: Record<string, unknown>) {
   return {
@@ -38,11 +39,11 @@ function publicUser(row: Record<string, unknown>) {
 export function passwordForPolicy(body: Record<string, unknown>, key: string, temporary = false): string {
   const password = requiredString(body, key, { min: 1, max: 128, trim: false });
   if (temporary) {
-    if (password.length < 8) throw new ApiError(422, 'WEAK_PASSWORD', 'Temporary passwords must contain at least 8 characters.');
+    if (password.length < MIN_PASSWORD_LENGTH) throw new ApiError(422, 'WEAK_PASSWORD', `Temporary passwords must contain at least ${MIN_PASSWORD_LENGTH} characters.`);
     return password;
   }
-  if (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-    throw new ApiError(422, 'WEAK_PASSWORD', 'Password must contain at least 12 characters, including at least one letter and one number.');
+  if (password.length < MIN_PASSWORD_LENGTH || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw new ApiError(422, 'WEAK_PASSWORD', `Password must contain at least ${MIN_PASSWORD_LENGTH} characters, including at least one letter and one number.`);
   }
   return password;
 }

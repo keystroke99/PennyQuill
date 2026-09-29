@@ -48,7 +48,8 @@ const administratorPassword = process.env.ADMIN_PASSWORD;
 const nonce = `${Date.now().toString(36)}-${randomBytes(5).toString('hex')}`;
 const syntheticEmail = `pennyquill-live-qa-${nonce}@example.invalid`;
 const temporaryPassword = `T9!${randomBytes(18).toString('base64url')}a`;
-const replacementPassword = `N7!${randomBytes(20).toString('base64url')}z`;
+// Exactly eight characters so live QA covers the production minimum-length boundary.
+const replacementPassword = `N7${randomBytes(3).toString('hex')}`;
 const marker = `PQ-LIVE-QA-${nonce}`;
 const qaDate = '2096-06-15';
 const qaMonthStart = '2096-06-01';
