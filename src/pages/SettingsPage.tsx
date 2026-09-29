@@ -9,9 +9,11 @@ import {
   LogOut,
   MessageSquareText,
   MonitorSmartphone,
+  Pencil,
   Plus,
   ShieldCheck,
   Smartphone,
+  Trash2,
   UserRound,
   UsersRound,
   WalletCards,
@@ -22,6 +24,20 @@ import { BrandMark, NamedIcon } from "../icons";
 import { Button, InlineError, Sheet } from "../components/Primitives";
 import type { Account, AuthSession, BeforeInstallPromptEvent, Category, Member, ReferenceData } from "../types";
 import { formatMoney, initials } from "../utils";
+
+const RELATIONSHIPS = [
+  ["self", "Self"],
+  ["spouse", "Spouse / partner"],
+  ["child", "Child"],
+  ["parent", "Parent"],
+  ["sibling", "Sibling"],
+  ["family", "Family"],
+  ["other", "Other"],
+] as const;
+
+function relationshipLabel(value: string): string {
+  return RELATIONSHIPS.find(([key]) => key === value)?.[1] ?? value;
+}
 
 export default function SettingsPage({
   session,
@@ -43,22 +59,53 @@ export default function SettingsPage({
   onInstallPromptConsumed: () => void;
 }) {
   const [form, setForm] = useState<"member" | "account" | "category" | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const canManageMembers = session.user.role !== "viewer";
+
+  function openForm(nextForm: "member" | "account" | "category") {
+    setEditingMember(null);
+    setFormError("");
+    setForm(nextForm);
+  }
+
+  function editMember(member: Member) {
+    setEditingMember(member);
+    setFormError("");
+    setForm("member");
+  }
+
+  function closeForm() {
+    if (saving) return;
+    setForm(null);
+    setEditingMember(null);
+    setFormError("");
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
-    setError("");
+    setFormError("");
     const data = new FormData(event.currentTarget);
     try {
       if (form === "member") {
-        const member = await api.createMember({
+        const memberInput = {
           name: String(data.get("name")),
           relationship: String(data.get("relationship")),
-          avatarIcon: "user-round",
-        });
-        onReferencesChanged({ members: [...references.members, member] });
+          ...(editingMember ? {} : { avatarIcon: "user-round" }),
+        };
+        const member = editingMember
+          ? await api.updateMember(editingMember.id, memberInput)
+          : await api.createMember(memberInput);
+        const members = editingMember
+          ? references.members.map((item) => item.id === member.id ? member : item)
+          : [...references.members, member];
+        onReferencesChanged({ members: members.sort((a, b) => a.name.localeCompare(b.name)) });
       } else if (form === "account") {
         const account = await api.createAccount({
           name: String(data.get("name")),
@@ -82,10 +129,26 @@ export default function SettingsPage({
         onReferencesChanged({ categories: [...references.categories, category].sort((a, b) => a.name.localeCompare(b.name)) });
       }
       setForm(null);
+      setEditingMember(null);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not save this setting.");
+      setFormError(caught instanceof ApiError ? caught.message : "Could not save this setting.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteMember() {
+    if (!memberToDelete) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.deleteMember(memberToDelete.id);
+      onReferencesChanged({ members: references.members.filter((member) => member.id !== memberToDelete.id) });
+      setMemberToDelete(null);
+    } catch (caught) {
+      setDeleteError(caught instanceof ApiError ? caught.message : "Could not remove this family member.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -123,20 +186,26 @@ export default function SettingsPage({
 
       <div className="settings-grid">
         <section className="panel settings-section">
-          <div className="section-heading"><div><p className="eyebrow">Household</p><h2>Family members</h2></div><button className="small-add" onClick={() => setForm("member")}><Plus size={16} /> Add</button></div>
+          <div className="section-heading"><div><p className="eyebrow">Household</p><h2>Family members</h2></div>{canManageMembers && <button className="small-add" onClick={() => openForm("member")}><Plus size={16} /> Add</button>}</div>
           <div className="settings-list">
             {references.members.map((member: Member) => (
-              <div className="settings-row" key={member.id}>
+              <div className="settings-row settings-row--member" key={member.id}>
                 <span className="settings-icon"><UserRound size={19} /></span>
-                <span><strong>{member.name}</strong><small>{member.relationship}</small></span>
-                {member.active && <span className="active-dot">Active</span>}
+                <span className="settings-row__content"><strong>{member.name}</strong><small>{relationshipLabel(member.relationship)}</small></span>
+                {canManageMembers ? (
+                  <span className="settings-row__actions">
+                    <button type="button" className="member-action" onClick={() => editMember(member)} aria-label={`Edit ${member.name}`} title={`Edit ${member.name}`}><Pencil size={17} /></button>
+                    <button type="button" className="member-action member-action--danger" onClick={() => { setDeleteError(""); setMemberToDelete(member); }} aria-label={`Delete ${member.name}`} title={`Delete ${member.name}`}><Trash2 size={17} /></button>
+                  </span>
+                ) : member.active ? <span className="active-dot">Active</span> : null}
               </div>
             ))}
+            {!references.members.length && <p className="panel-placeholder">No active family members. Add someone to attribute income and spending.</p>}
           </div>
         </section>
 
         <section className="panel settings-section">
-          <div className="section-heading"><div><p className="eyebrow">Your taxonomy</p><h2>Categories</h2></div><button className="small-add" onClick={() => setForm("category")}><Plus size={16} /> Add</button></div>
+          <div className="section-heading"><div><p className="eyebrow">Your taxonomy</p><h2>Categories</h2></div><button className="small-add" onClick={() => openForm("category")}><Plus size={16} /> Add</button></div>
           <div className="settings-list settings-list--categories">
             {references.categories.slice(0, 8).map((category: Category) => (
               <div className="settings-row" key={category.id}>
@@ -149,7 +218,7 @@ export default function SettingsPage({
         </section>
 
         <section className="panel settings-section">
-          <div className="section-heading"><div><p className="eyebrow">Money locations</p><h2>Accounts</h2></div><button className="small-add" onClick={() => setForm("account")}><Plus size={16} /> Add</button></div>
+          <div className="section-heading"><div><p className="eyebrow">Money locations</p><h2>Accounts</h2></div><button className="small-add" onClick={() => openForm("account")}><Plus size={16} /> Add</button></div>
           <div className="settings-list">
             {references.accounts.map((account: Account) => (
               <div className="settings-row" key={account.id}>
@@ -208,11 +277,14 @@ export default function SettingsPage({
       </div>
 
       {error && <InlineError message={error} />}
-      <Sheet open={Boolean(form)} onClose={() => setForm(null)} title={form === "member" ? "Add family member" : form === "account" ? "Add account" : "Add category"} eyebrow="Household setup">
-        <form className="form-stack" onSubmit={save}>
-          <label>Name<input name="name" required maxLength={80} placeholder={form === "member" ? "Family member name" : form === "account" ? "Primary bank" : "Childcare"} /></label>
+      <Sheet open={Boolean(form)} onClose={closeForm} title={form === "member" ? editingMember ? "Edit family member" : "Add family member" : form === "account" ? "Add account" : "Add category"} eyebrow={form === "member" ? "Family member" : "Household setup"}>
+        <form className="form-stack" onSubmit={save} key={`${form ?? "form"}-${editingMember?.id ?? "new"}`}>
+          <label>Name<input name="name" required maxLength={80} defaultValue={form === "member" ? editingMember?.name ?? "" : ""} placeholder={form === "member" ? "Family member name" : form === "account" ? "Primary bank" : "Childcare"} autoFocus /></label>
           {form === "member" ? (
-            <label>Relationship<select name="relationship" defaultValue="spouse"><option value="self">Self</option><option value="spouse">Spouse / partner</option><option value="child">Child</option><option value="parent">Parent</option><option value="sibling">Sibling</option><option value="other">Other</option></select></label>
+            <label>Relationship<select name="relationship" defaultValue={editingMember?.relationship ?? "spouse"}>
+              {editingMember && !RELATIONSHIPS.some(([key]) => key === editingMember.relationship) && <option value={editingMember.relationship}>{editingMember.relationship}</option>}
+              {RELATIONSHIPS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </select></label>
           ) : form === "account" ? (
             <>
               <label>Type<select name="type" defaultValue="bank"><option value="bank">Bank account</option><option value="cash">Cash</option><option value="credit_card">Credit card</option><option value="wallet">Digital wallet</option><option value="investment">Investment</option><option value="other">Other</option></select></label>
@@ -224,8 +296,27 @@ export default function SettingsPage({
               <label>Color<input name="color" type="color" defaultValue="#385B45" /></label>
             </>
           )}
-          <Button type="submit" disabled={saving}>{saving ? "Saving…" : <><Check size={17} /> Save</>}</Button>
+          {formError && <InlineError message={formError} />}
+          <Button type="submit" disabled={saving}>{saving ? "Saving…" : <><Check size={17} /> {editingMember ? "Save changes" : "Save"}</>}</Button>
         </form>
+      </Sheet>
+
+      <Sheet open={Boolean(memberToDelete)} onClose={() => { if (!deleting) { setMemberToDelete(null); setDeleteError(""); } }} title="Delete family member?" eyebrow="Household">
+        {memberToDelete && (
+          <div className="delete-confirmation">
+            <span className="delete-confirmation__icon"><Trash2 size={24} /></span>
+            <div>
+              <strong>Remove {memberToDelete.name} from active family members?</strong>
+              <p>They will disappear from new entries and filters. Existing transactions, analytics and planning records keep their attribution.</p>
+              {memberToDelete.userId && <p>The linked sign-in account will remain active and must be managed separately.</p>}
+            </div>
+            {deleteError && <InlineError message={deleteError} />}
+            <div className="delete-confirmation__actions">
+              <Button type="button" variant="ghost" onClick={() => { setMemberToDelete(null); setDeleteError(""); }} disabled={deleting}>Cancel</Button>
+              <Button type="button" variant="danger" onClick={deleteMember} disabled={deleting}><Trash2 size={17} /> {deleting ? "Deleting…" : "Delete member"}</Button>
+            </div>
+          </div>
+        )}
       </Sheet>
     </div>
   );

@@ -7,12 +7,13 @@ import net from "node:net";
 const BASE_URL = (process.env.BASE_URL || "http://127.0.0.1:8787").replace(/\/$/, "");
 const QA_EMAIL = process.env.QA_EMAIL || "";
 const QA_PASSWORD = process.env.QA_PASSWORD || "";
+const PUBLIC_ONLY = process.env.PUBLIC_ONLY === "true";
 const OUT_DIR = resolve(process.env.OUT_DIR || "qa-artifacts/browser");
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const COMMAND_TIMEOUT_MS = 15_000;
 const PAGE_TIMEOUT_MS = 20_000;
 
-if (!QA_EMAIL || !QA_PASSWORD) {
+if (!PUBLIC_ONLY && (!QA_EMAIL || !QA_PASSWORD)) {
   console.error("QA_EMAIL and QA_PASSWORD are required.");
   process.exit(2);
 }
@@ -281,6 +282,19 @@ async function auditCurrentView(client, viewport, pageName, screenshotName) {
       .filter((element) => !accessibleName(element))
       .map((element) => ({ selector: selector(element), tag: element.tagName.toLowerCase(), type: element.getAttribute("type") || null }));
 
+    const zoomRiskControls = expectedWidth <= 820
+      ? controls
+        .filter((element) => element instanceof HTMLSelectElement
+          || element instanceof HTMLTextAreaElement
+          || (element instanceof HTMLInputElement && !["hidden", "checkbox", "radio", "range", "color", "file", "button", "submit", "reset"].includes(element.type)))
+        .map((element) => ({
+          selector: selector(element),
+          name: accessibleName(element).slice(0, 100),
+          fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+        }))
+        .filter(({ fontSize }) => fontSize < 16)
+      : [];
+
     const primarySelector = [
       "button.button",
       "button[type=submit]",
@@ -320,6 +334,7 @@ async function auditCurrentView(client, viewport, pageName, screenshotName) {
       overflowing,
       unlabeled,
       undersized,
+      zoomRiskControls,
     };
   }, { expectedWidth: viewport.width, currentPage: pageName });
   audit.screenshot = await screenshot(client, screenshotName);
@@ -409,6 +424,25 @@ async function runViewport(viewport) {
     await client.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
     await client.send("Page.navigate", { url: BASE_URL });
     await waitFor(client, "the sign-in form", () => Boolean(document.querySelector('input[name="email"]') && document.querySelector('input[name="password"]')), null);
+    if (PUBLIC_ONLY) {
+      await waitForSettledUi(client);
+      audits.push(await auditCurrentView(client, viewport, "Sign in", `${viewport.label}-sign-in.png`));
+      for (let index = failedResponses.length - 1; index >= 0; index -= 1) {
+        const failure = failedResponses[index];
+        if (failure.status === 401 && new URL(failure.url).pathname === "/api/auth/me") failedResponses.splice(index, 1);
+      }
+      return {
+        viewport,
+        login: "skipped-public-only",
+        audits,
+        runtimeExceptions,
+        consoleErrors,
+        failedResponses,
+        loadingFailures,
+        apiFailures: failedResponses.filter(({ url }) => url.includes("/api/")),
+        apiLoadingFailures: loadingFailures.filter(({ url }) => url.includes("/api/")),
+      };
+    }
     await setInput(client, "email", QA_EMAIL);
     await setInput(client, "password", QA_PASSWORD);
     await clickNamed(client, ["Sign in"]);
@@ -513,6 +547,7 @@ async function main() {
       horizontalOverflows: results.reduce((total, result) => total + result.audits.filter((audit) => audit.horizontalOverflow).length, 0),
       unlabeledControls: results.reduce((total, result) => total + result.audits.reduce((count, audit) => count + audit.unlabeled.length, 0), 0),
       undersizedPrimaryControls: results.reduce((total, result) => total + result.audits.reduce((count, audit) => count + audit.undersized.length, 0), 0),
+      mobileZoomRiskControls: results.reduce((total, result) => total + result.audits.reduce((count, audit) => count + audit.zoomRiskControls.length, 0), 0),
     },
     results,
   };
@@ -525,7 +560,8 @@ async function main() {
     + summary.totals.consoleErrors
     + summary.totals.failedApiResponses
     + summary.totals.horizontalOverflows
-    + summary.totals.unlabeledControls;
+    + summary.totals.unlabeledControls
+    + summary.totals.mobileZoomRiskControls;
   if (hardFailureCount > 0) {
     console.error(`Browser QA failed with ${hardFailureCount} blocking issue(s).`);
     process.exit(1);

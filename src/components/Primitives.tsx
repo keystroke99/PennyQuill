@@ -54,6 +54,11 @@ export function Sheet({
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    const scrollY = window.scrollY;
+    const useFixedBodyLock = window.matchMedia("(max-width: 820px)").matches;
     const siblingStates = Array.from(backdrop.parentElement?.children ?? [])
       .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== backdrop)
       .map((element) => ({
@@ -66,6 +71,11 @@ export function Sheet({
       element.setAttribute("aria-hidden", "true");
     });
     document.body.style.overflow = "hidden";
+    if (useFixedBodyLock) {
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+    }
 
     const focusableElements = () => Array.from(dialog.querySelectorAll<HTMLElement>(
       'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -105,12 +115,16 @@ export function Sheet({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      if (useFixedBodyLock) window.scrollTo(0, scrollY);
       siblingStates.forEach(({ element, ariaHidden, inert }) => {
         element.inert = inert;
         if (ariaHidden === null) element.removeAttribute("aria-hidden");
         else element.setAttribute("aria-hidden", ariaHidden);
       });
-      previousFocus?.focus();
+      previousFocus?.focus({ preventScroll: true });
     };
   }, [open]);
 

@@ -107,6 +107,10 @@ export const api = {
   members: () => request<{ items: Member[] } | Member[]>("/api/members"),
   createMember: (body: Record<string, unknown>) =>
     request<Member>("/api/members", { method: "POST", body: JSON.stringify(body) }),
+  updateMember: (id: string, body: Record<string, unknown>) =>
+    request<Member>(`/api/members/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteMember: (id: string) =>
+    request<void>(`/api/members/${id}`, { method: "DELETE" }),
   categories: () => request<{ items: Category[] } | Category[]>("/api/categories"),
   accounts: () => request<{ items: Account[] } | Account[]>("/api/accounts"),
   createAccount: (body: Record<string, unknown>) =>

@@ -23,6 +23,7 @@ export interface AuthSession {
 
 export interface Member {
   id: string;
+  userId?: string | null;
   name: string;
   relationship: string;
   avatarIcon: string;

@@ -424,6 +424,26 @@ try {
     assert(objectContainsId(accounts.data?.items, accountTwo.id), 'Created wallet account was not listed.');
   });
 
+  await step('Edit and delete a family member while preserving the archive', async () => {
+    const lifecycleMember = await createResource('members', {
+      name: `${marker} Editable`, relationship: 'other', avatarIcon: 'user-round', active: true,
+    });
+    const updatedName = `${marker} Edited`;
+    const updated = await api(`/api/members/${encodeURIComponent(lifecycleMember.id)}`, {
+      method: 'PATCH', jar: syntheticJar, body: { name: updatedName, relationship: 'sibling' },
+    });
+    assertEqual(updated.data?.name, updatedName, 'Edited member name');
+    assertEqual(updated.data?.relationship, 'sibling', 'Edited member relationship');
+
+    await api(`/api/members/${encodeURIComponent(lifecycleMember.id)}`, { method: 'DELETE', jar: syntheticJar }, 204);
+    const active = await api('/api/members?pageSize=100', { jar: syntheticJar });
+    assert(!objectContainsId(active.data?.items, lifecycleMember.id), 'Deleted member remained in the active list.');
+    const archived = await api('/api/members?pageSize=100&includeInactive=true', { jar: syntheticJar });
+    const archivedMember = archived.data?.items?.find((item) => item.id === lifecycleMember.id);
+    assertEqual(archivedMember?.active, false, 'Deleted member archive state');
+    assertEqual(archivedMember?.name, updatedName, 'Deleted member retained edited name');
+  });
+
   await step('Transactions, pending-to-cleared lifecycle, and dashboard arithmetic', async () => {
     baselineDashboard = (await api(query('/api/dashboard', { from: qaDate, to: qaDate }), { jar: syntheticJar })).data;
     const common = { memberId: references.member.id, accountId: references.accountOne.id, occurredOn: qaDate, source: 'manual', tags: ['live-qa', nonce] };
@@ -584,7 +604,7 @@ try {
     const audit = await api('/api/audit?pageSize=100', { jar: syntheticJar });
     assert(Array.isArray(audit.data?.items) && audit.data.items.length > 0, 'Audit feed is empty.');
     const actions = new Set(audit.data.items.map((item) => item.action));
-    for (const action of ['users.created', 'auth.password_changed', 'transactions.created', 'transactions.updated', 'household.exported']) {
+    for (const action of ['users.created', 'auth.password_changed', 'members.updated', 'members.deactivated', 'transactions.created', 'transactions.updated', 'household.exported']) {
       assert(actions.has(action), `Audit feed is missing ${action}.`);
     }
     assert(Number.isInteger(audit.data?.pagination?.total), 'Audit pagination total is missing.');

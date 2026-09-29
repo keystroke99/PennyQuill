@@ -6,7 +6,7 @@ PennyQuill is a mobile-first household expense, income, budget and forecast appl
 
 - Fast amount-first entry for expenses, income, transfers and refunds
 - Cleared, pending and planned transaction states
-- Household members, accounts, categories, tags and recurring money
+- Household members with mobile add, edit and history-safe removal, plus accounts, categories, tags and recurring money
 - Salary and other income attributed to individual family members
 - Category budgets, savings/debt goals and upcoming bills
 - Dashboard cash flow, savings rate, category mix and recent activity
